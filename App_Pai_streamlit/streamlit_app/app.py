@@ -6,6 +6,7 @@ from database import (
     init_db,
     verificar_login,
     listar_responsaveis,
+    criar_responsavel,
     inserir_pedido,
     listar_pedidos,
     aprovar_pedido,
@@ -50,24 +51,59 @@ def tela_login():
 
     responsaveis = listar_responsaveis()
 
-    if not responsaveis:
-        st.error(
-            "Nenhum responsável registado ainda. "
-            "Corre `seed_responsaveis.py` uma vez antes de usar a app."
+    if responsaveis:
+        with st.form("login_form"):
+            nome = st.selectbox("Responsável", responsaveis)
+            password = st.text_input("Palavra-passe", type="password")
+            entrar = st.form_submit_button("Entrar", use_container_width=True)
+
+            if entrar:
+                if verificar_login(nome, password):
+                    st.session_state.responsavel_logado = nome
+                    st.rerun()
+                else:
+                    st.error("Nome ou palavra-passe incorretos.")
+    else:
+        st.info("Ainda não há responsáveis registados. Cria o primeiro abaixo.")
+
+    st.divider()
+
+    with st.expander("⚙️ Criar responsável (acesso restrito)"):
+        st.caption(
+            "Requer a chave de administração definida nos Secrets da app "
+            "(ADMIN_SETUP_KEY). Usa isto para criar ou adicionar responsáveis."
         )
-        return
 
-    with st.form("login_form"):
-        nome = st.selectbox("Responsável", responsaveis)
-        password = st.text_input("Palavra-passe", type="password")
-        entrar = st.form_submit_button("Entrar", use_container_width=True)
+        admin_key_configurada = st.secrets.get("ADMIN_SETUP_KEY")
 
-        if entrar:
-            if verificar_login(nome, password):
-                st.session_state.responsavel_logado = nome
-                st.rerun()
-            else:
-                st.error("Nome ou palavra-passe incorretos.")
+        if not admin_key_configurada:
+            st.warning(
+                "ADMIN_SETUP_KEY não está definida nos Secrets da app. "
+                "Define-a em Settings → Secrets no Streamlit Cloud antes de continuar."
+            )
+        else:
+            with st.form("criar_responsavel_form"):
+                chave = st.text_input("Chave de administração", type="password")
+                novo_nome = st.text_input("Nome do responsável")
+                nova_password = st.text_input("Password inicial", type="password")
+                confirmar_password = st.text_input("Confirmar password", type="password")
+
+                criar = st.form_submit_button("Criar responsável")
+
+                if criar:
+                    if chave != admin_key_configurada:
+                        st.error("Chave de administração incorreta.")
+                    elif not novo_nome or not nova_password:
+                        st.error("Preenche o nome e a password.")
+                    elif nova_password != confirmar_password:
+                        st.error("As passwords não coincidem.")
+                    else:
+                        criado = criar_responsavel(novo_nome, nova_password)
+                        if criado:
+                            st.success(f"Responsável '{novo_nome}' criado. Já podes fazer login acima.")
+                            st.rerun()
+                        else:
+                            st.error(f"Já existe um responsável chamado '{novo_nome}'.")
 
 
 # ==============================================================
